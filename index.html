@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color"content="#141414">
+
+  <title>mpuz</title>
+  
+  <link rel="stylesheet" href="/files/style.css">
+  
+</head>
+<body>
+<div class="game">
+  <div class="top-bar">
+    <div class="stat">OUTPUT<span id="liveResultDisplay">0</span></div>
+    <div class="target-block">
+      <span class="target-label">TARGET</span>
+      <div class="target-value" id="targetNumber">0</div>
+    </div>
+    <div class="stat right">PUZZLE <span id="puzzleNumber">1</span></div>
+  </div>
+  <div class="grid-container">
+    <div id="grid" class="grid"></div>
+  </div>
+</div>
+
+<div id="winOverlay" class="win-overlay">
+  <div id="winText" class="win-text">Win</div>
+</div>
+
+<script src="/files/script.js"></script>
+</body>
+</html>
