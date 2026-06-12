@@ -2,37 +2,556 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="color-scheme" content="dark">
-  <meta name="theme-color"content="#141414">
+  <meta name="theme-color" content="#141414">
+  <title>Bodmas Puzzle</title>
+  <style>
+    * {
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      box-sizing: border-box;
+      -webkit-user-select: none;
+    }
 
-  <title>mpuz</title>
-  
-  <link rel="stylesheet" href="files/style.css">
-  
+    body {
+      margin: 0;
+      min-height: 100dvh;
+      background: #141414;
+      font-family: Lato, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 16px;
+      touch-action: none;
+    }
+
+    .game {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      width: min(calc(100vw - 32px), calc(100dvh - 32px - 72px));
+    }
+
+    /* ── Top bar ── */
+    .top-bar {
+      display: flex;
+      justify-content: center;
+      align-items: baseline;
+      padding: 4px 12px;
+    }
+    .target-block { text-align: center; }
+    .target-label {
+      font-size: 0.65rem;
+      letter-spacing: 1px;
+      color: #606060;
+      display: block;
+      margin-bottom: 2px;
+    }
+    .target-value {
+      font-size: 2rem;
+      font-weight: 200;
+      color: #f8f8f8;
+      line-height: 1;
+    }
+
+    /* ── Grid ── */
+    .grid-container {
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      background: #1a1a1a;
+      padding: 4px;
+    }
+
+    .grid {
+      width: 100%;
+      height: 100%;
+      display: grid;
+      grid-template-columns: repeat(8, 1fr);
+      grid-template-rows:    repeat(8, 1fr);
+      gap: 5px;
+    }
+
+    /* ── Cells: each cell fills its grid track exactly ── */
+    .cell {
+      /* Fill the grid track completely — no aspect-ratio needed,
+         grid-template-rows: repeat(8,1fr) handles the height */
+      width: 100%;
+      height: 100%;
+      min-width: 0;
+      min-height: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+      font-size: clamp(0.5rem, 3.2vmin, 1.3rem);
+      position: relative;
+      cursor: grab;
+      overflow: hidden;
+      transition: filter 0.08s ease, opacity 0.08s ease;
+      will-change: filter, opacity;
+      touch-action: none;
+    }
+
+    .cell.empty    { background: #141414; cursor: default; }
+    .cell.number   { background: #3a6ea5; color: #f8f8f8; }
+    .cell.op-add   { background: #2e7d52; color: #f8f8f8; }
+    .cell.op-sub   { background: #7d3a3a; color: #f8f8f8; }
+    .cell.op-mul   { background: #6b3e99; color: #f8f8f8; }
+    .cell.op-div   { background: #b07830; color: #f8f8f8; }
+    .cell.op-frac  {
+      background: #7a3a6a; color: #f8f8f8;
+      font-size: clamp(0.38rem, 1.8vmin, 0.65rem);
+      font-weight: 500;
+      flex-direction: column;
+      line-height: 1.15;
+    }
+    .cell.op-lparen,
+    .cell.op-rparen { background: #1a6a7a; color: #f8f8f8; }
+
+    .frac-top {
+      text-align: center;
+      border-bottom: 1.5px solid rgba(255,255,255,0.7);
+      padding: 0 3px 1px;
+      width: 100%;
+    }
+    .frac-bot {
+      text-align: center;
+      padding: 1px 3px 0;
+      width: 100%;
+    }
+
+    /* ── Drag ghost ── */
+    #dragGhost {
+      position: fixed;
+      pointer-events: none;
+      z-index: 9999;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+      font-size: clamp(0.5rem, 3.2vmin, 1.3rem);
+      transform: translate(-50%, -50%) scale(1.13);
+      color: transparent;
+      will-change: left, top;
+    }
+    #dragGhost.frac {
+      flex-direction: column;
+      font-size: clamp(0.38rem, 1.8vmin, 0.65rem);
+      font-weight: 500;
+      line-height: 1.15;
+      color: transparent;
+    }
+    #dragGhost .frac-top {
+      border-bottom: 0px solid rgba(255,255,255,0.7);
+      padding: 0 3px 1px;
+      text-align: center;
+      color: transparent;
+      width: 100%;
+    }
+    #dragGhost .frac-bot {
+      padding: 1px 3px 0;
+      text-align: center;
+      color: transparent;
+      width: 100%;
+    }
+    /* ── Win overlay ── */
+    .win-overlay {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      background: #141414;
+      justify-content: center;
+      z-index: 1000;
+      pointer-events: none;
+      opacity: 0;
+    }
+    .win-overlay.visible { pointer-events: all; }
+    .win-text {
+      font-size: clamp(4rem, 18vw, 11rem);
+      font-weight: 100;
+      color: #f8f8f8;
+    }
+
+    @keyframes bgIn  { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes bgOut { from { opacity: 1; } to { opacity: 0; } }
+  </style>
 </head>
 <body>
 <div class="game">
   <div class="top-bar">
-    <div class="stat">OUTPUT<span id="liveResultDisplay">0</span></div>
     <div class="target-block">
       <span class="target-label">TARGET</span>
       <div class="target-value" id="targetNumber">0</div>
     </div>
-    <div class="stat right">PUZZLE <span id="puzzleNumber">1</span></div>
   </div>
   <div class="grid-container">
     <div id="grid" class="grid"></div>
   </div>
 </div>
-
+<div id="dragGhost"></div>
 <div id="winOverlay" class="win-overlay">
-  <div id="winText" class="win-text">Win</div>
+  <div class="win-text">Win</div>
 </div>
+<script>
+(function () {
+  'use strict';
 
-<script src="files/script.js"></script>
+  const GRID_SIZE = 8;
+  let targetValue   = 0;
+  let gridData      = [];
+  let winInProgress = false;
+
+  const gridEl     = document.getElementById('grid');
+  const targetSpan = document.getElementById('targetNumber');
+  const winOverlay = document.getElementById('winOverlay');
+  const ghost      = document.getElementById('dragGhost');
+
+  /* ── utils ── */
+  function uid()  { return Date.now() + '-' + Math.random().toString(36).slice(2,8); }
+  function rnd(a,b){ return Math.floor(Math.random()*(b-a+1))+a; }
+  function pick(a){ return a[Math.floor(Math.random()*a.length)]; }
+
+  function opClass(op) {
+    if (op==='+')    return 'op-add';
+    if (op==='-')    return 'op-sub';
+    if (op==='*')    return 'op-mul';
+    if (op==='/')    return 'op-div';
+    if (op==='(')    return 'op-lparen';
+    if (op===')')    return 'op-rparen';
+    if (op==='FRAC') return 'op-frac';
+    return 'operator';
+  }
+
+  function blocksToExpr(blocks) {
+    return blocks.map(b => {
+      if (b.type==='number') return b.value.toString();
+      if (b.op==='FRAC')     return `(${b.fracTop}/${b.fracBot})`;
+      return b.value;
+    }).join(' ');
+  }
+
+  function evaluateExpression(blocks) {
+    if (!blocks.length) return NaN;
+    const expr = blocksToExpr(blocks).trim();
+    if (/^[+\-*/]/.test(expr) || /[+\-*/]$/.test(expr)) return NaN;
+    if (/[+\-*/]\s*[+\-*/]/.test(expr)) return NaN;
+    try {
+      const r = Function('"use strict"; return (' + expr + ')')();
+      return (typeof r==='number' && isFinite(r)) ? r : NaN;
+    } catch(e) { return NaN; }
+  }
+
+  /* ── line scanning ── */
+  function getAllLines() {
+    const lines = [];
+    for (let r=0; r<GRID_SIZE; r++) {
+      let run=[];
+      for (let c=0; c<GRID_SIZE; c++) {
+        if (gridData[r][c]) run.push(gridData[r][c]);
+        else { if (run.length>=3) lines.push([...run]); run=[]; }
+      }
+      if (run.length>=3) lines.push([...run]);
+    }
+    for (let c=0; c<GRID_SIZE; c++) {
+      let run=[];
+      for (let r=0; r<GRID_SIZE; r++) {
+        if (gridData[r][c]) run.push(gridData[r][c]);
+        else { if (run.length>=3) lines.push([...run]); run=[]; }
+      }
+      if (run.length>=3) lines.push([...run]);
+    }
+    return lines;
+  }
+
+  function isValidChain(blocks) {
+    if (blocks.length<2) return false;
+    const first=blocks[0];
+    if (first.type!=='number' && first.op!=='FRAC' && first.value!=='(') return false;
+    for (let i=0; i<blocks.length-1; i++) {
+      const a=blocks[i], b=blocks[i+1];
+      const aOp = a.type==='operator' && a.value!=='(' && a.value!==')' && a.op!=='FRAC';
+      const bOp = b.type==='operator' && b.value!=='(' && b.value!==')' && b.op!=='FRAC';
+      if (aOp && bOp) return false;
+    }
+    return true;
+  }
+
+  function checkWin() {
+    if (winInProgress) return;
+    for (const line of getAllLines()) {
+      if (isValidChain(line)) {
+        const val = evaluateExpression(line);
+        if (!isNaN(val) && Math.abs(val-targetValue)<0.000001) { doWin(); return; }
+      }
+    }
+  }
+
+  function doWin() {
+    winInProgress = true;
+    winOverlay.classList.add('visible');
+    winOverlay.style.animation = 'bgIn 0.1s ease forwards';
+    setTimeout(()=>{ winOverlay.style.animation='bgOut 0.1s ease forwards'; }, 2000);
+    setTimeout(()=>{
+      winOverlay.classList.remove('visible');
+      winOverlay.style.animation='';
+      winInProgress=false;
+      generateAndLoad();
+    }, 2000);
+  }
+
+  /* ── block factories ── */
+  function mkNum(v) { return {id:uid(), type:'number', value:v, display:v.toString()}; }
+  function mkOp(op) {
+    const display = op==='*'?'×': op==='/'?'÷': op;
+    return {id:uid(), type:'operator', op, value:op, display};
+  }
+  function mkList(nums, ops) {
+    const out=[];
+    for (let i=0;i<nums.length;i++) { out.push(mkNum(nums[i])); if(i<ops.length) out.push(mkOp(ops[i])); }
+    return out;
+  }
+
+  /* ── puzzle builders ── */
+  function buildSimple(target) {
+    const ops=['+','-','*','/'];
+    for (let t=0;t<300;t++) {
+      const n=rnd(2,4), nums=[], chosen=[];
+      for(let i=0;i<n;i++) nums.push(rnd(1,12));
+      for(let i=0;i<n-1;i++) {
+        const op=pick(ops);
+        if(op==='/'){if(nums[i+1]===0)nums[i+1]=1; nums[i]=nums[i]*nums[i+1];}
+        chosen.push(op);
+      }
+      const bl=mkList(nums,chosen);
+      const val=evaluateExpression(bl);
+      if(!isNaN(val)&&Math.abs(val-target)<0.000001) return bl;
+    }
+    const a=rnd(1,Math.max(1,Math.abs(target)+10)), b=target-a;
+    return b>=0?mkList([a,b],['+']): mkList([a,-b],['-']);
+  }
+
+  function buildParen(target) {
+    for(let t=0;t<300;t++){
+      const c=rnd(1,20), outerOp=pick(['+','-','*']);
+      let inner;
+      if(outerOp==='+') inner=target-c;
+      else if(outerOp==='-') inner=target+c;
+      else { if(c===0||target%c!==0) continue; inner=target/c; }
+      const a=rnd(1,30), iop=pick(['+','-']);
+      const b=iop==='+'?inner-a:a-inner;
+      if(!Number.isInteger(b)||b<1||b>50) continue;
+      const bl=[mkOp('('),mkNum(a),mkOp(iop),mkNum(b),mkOp(')'),mkOp(outerOp),mkNum(c)];
+      const val=evaluateExpression(bl);
+      if(!isNaN(val)&&Math.abs(val-target)<0.000001) return bl;
+    }
+    return buildSimple(target);
+  }
+
+  function buildFrac(target) {
+    for(let t=0;t<300;t++){
+      const bot=rnd(2,10), num2=rnd(0,20), op=pick(['+','-','*']);
+      let fv;
+      if(op==='+') fv=target-num2;
+      else if(op==='-') fv=target+num2;
+      else { if(num2===0) continue; fv=target/num2; }
+      const top=fv*bot;
+      if(!Number.isInteger(top)||top<1||top>99) continue;
+      const fb={id:uid(),type:'operator',op:'FRAC',fracTop:top,fracBot:bot,value:`(${top}/${bot})`,display:`FRAC:${top}:${bot}`};
+      const bl=[fb,mkOp(op),mkNum(num2)];
+      const val=evaluateExpression(bl);
+      if(!isNaN(val)&&Math.abs(val-target)<0.000001) return bl;
+    }
+    return buildSimple(target);
+  }
+
+  function buildPuzzle() {
+    const useFrac  = Math.random()<0.08;
+    const useParen = !useFrac && Math.random()<0.10;
+    const target   = rnd(-19,49);
+    let sol = useFrac?buildFrac(target):useParen?buildParen(target):buildSimple(target);
+
+    const allOps=['+','-','*','/'];
+    const used=new Set(sol.filter(b=>b.type==='operator').map(b=>b.op));
+    const missing=allOps.filter(o=>!used.has(o)).map(mkOp);
+    const pad=Array.from({length:rnd(3,6)},()=>mkNum(rnd(1,12)));
+    return {target, blocks:[...sol,...missing,...pad]};
+  }
+
+  function placeBlocks(blocks) {
+    const total=GRID_SIZE*GRID_SIZE;
+    const flat=Array(total).fill(null);
+    blocks.slice(0,total).forEach((b,i)=>{ flat[i]=b; });
+    for(let i=flat.length-1;i>0;i--){
+      const j=Math.floor(Math.random()*(i+1));
+      [flat[i],flat[j]]=[flat[j],flat[i]];
+    }
+    gridData=[];
+    for(let r=0;r<GRID_SIZE;r++){
+      gridData[r]=[];
+      for(let c=0;c<GRID_SIZE;c++) gridData[r][c]=flat[r*GRID_SIZE+c]||null;
+    }
+  }
+
+  function generateAndLoad() {
+    const {target,blocks}=buildPuzzle();
+    targetValue=target;
+    targetSpan.innerText=target;
+    placeBlocks(blocks);
+    renderGrid();
+  }
+
+  /* ── rendering ── */
+  function makeCellEl(block, row, col) {
+    const cell=document.createElement('div');
+    let cls='cell';
+    if (!block)                   cls+=' empty';
+    else if (block.type==='number') cls+=' number';
+    else                           cls+=' '+opClass(block.op||block.value);
+    cell.className=cls;
+    cell.dataset.row=row;
+    cell.dataset.col=col;
+    if (block) {
+      if (block.op==='FRAC') {
+        cell.innerHTML=`<span class="frac-top">${block.fracTop}</span><span class="frac-bot">${block.fracBot}</span>`;
+      } else {
+        cell.innerText=block.display;
+      }
+    }
+    return cell;
+  }
+
+  function renderGrid() {
+    gridEl.innerHTML='';
+    for(let r=0;r<GRID_SIZE;r++)
+      for(let c=0;c<GRID_SIZE;c++)
+        gridEl.appendChild(makeCellEl(gridData[r][c],r,c));
+    gridEl.addEventListener('pointerdown', onDown, {passive:false});
+  }
+
+  function refreshCell(r,c) {
+    const old=gridEl.querySelector(`.cell[data-row='${r}'][data-col='${c}']`);
+    if(old) old.replaceWith(makeCellEl(gridData[r][c],r,c));
+  }
+
+  /* ── drag ── */
+  let dragging=false, srcRow=-1, srcCol=-1, lastR=-1, lastC=-1;
+  let ghostX=0, ghostY=0, rafId=null;
+
+  function cellAt(x,y) {
+    const els=document.elementsFromPoint(x,y);
+    for(const el of els){
+      const c=el.closest('.cell[data-row]');
+      if(c) return {row:+c.dataset.row, col:+c.dataset.col};
+    }
+    return null;
+  }
+
+  function setGhostContent(block) {
+    ghost.className='';
+    ghost.innerHTML='';
+    if(!block){ghost.style.display='none';return;}
+
+    // Match ghost size to an actual cell
+    const anyCell=gridEl.querySelector('.cell');
+    if(anyCell){
+      const r=anyCell.getBoundingClientRect();
+      ghost.style.width =r.width +'px';
+      ghost.style.height=r.height+'px';
+    }
+
+    if(block.type==='number'){
+      ghost.classList.add('number');
+      ghost.innerText=block.display;
+    } else if(block.op==='FRAC'){
+      ghost.classList.add('op-frac','frac');
+      ghost.innerHTML=`<span class="frac-top">${block.fracTop}</span><span class="frac-bot">${block.fracBot}</span>`;
+    } else {
+      ghost.classList.add(opClass(block.op||block.value));
+      ghost.innerText=block.display;
+    }
+    ghost.style.display='flex';
+  }
+
+  function moveGhost(){ ghost.style.left=ghostX+'px'; ghost.style.top=ghostY+'px'; rafId=null; }
+  function scheduleGhost(x,y){ ghostX=x; ghostY=y; if(rafId===null) rafId=requestAnimationFrame(moveGhost); }
+
+  function startDrag(row,col,x,y){
+    const block=gridData[row][col];
+    if(!block) return;
+    dragging=true; srcRow=row; srcCol=col; lastR=row; lastC=col;
+    const el=gridEl.querySelector(`.cell[data-row='${row}'][data-col='${col}']`);
+    if(el) el.classList.add('is-source');
+    setGhostContent(block);
+    scheduleGhost(x,y);
+  }
+
+  function moveDrag(x,y){
+    if(!dragging) return;
+    scheduleGhost(x,y);
+    const hit=cellAt(x,y);
+    if(!hit||( hit.row===lastR && hit.col===lastC)) return;
+
+    // remove highlight from previous target
+    const prev=gridEl.querySelector(`.cell[data-row='${lastR}'][data-col='${lastC}']`);
+    if(prev){prev.classList.remove('is-source','is-target');}
+
+    // swap
+    [gridData[srcRow][srcCol], gridData[hit.row][hit.col]] =
+    [gridData[hit.row][hit.col], gridData[srcRow][srcCol]];
+
+    refreshCell(srcRow, srcCol);
+    refreshCell(hit.row, hit.col);
+
+    srcRow=hit.row; srcCol=hit.col; lastR=hit.row; lastC=hit.col;
+    const newEl=gridEl.querySelector(`.cell[data-row='${srcRow}'][data-col='${srcCol}']`);
+    if(newEl) newEl.classList.add('is-source');
+
+    checkWin();
+  }
+
+  function endDrag(){
+    if(!dragging) return;
+    dragging=false;
+    if(rafId!==null){cancelAnimationFrame(rafId);rafId=null;}
+    ghost.style.display='none';
+    gridEl.querySelectorAll('.is-source,.is-target').forEach(el=>el.classList.remove('is-source','is-target'));
+    srcRow=srcCol=lastR=lastC=-1;
+    checkWin();
+  }
+
+  function onDown(e){
+    if(e.button!==0 && e.pointerType==='mouse') return;
+    const hit=cellAt(e.clientX,e.clientY);
+    if(!hit||!gridData[hit.row][hit.col]) return;
+    e.preventDefault(); e.stopPropagation();
+    try{gridEl.setPointerCapture(e.pointerId);}catch(_){}
+    startDrag(hit.row,hit.col,e.clientX,e.clientY);
+
+    function onMove(ev){
+      if(ev.pointerId!==e.pointerId) return;
+      ev.preventDefault();
+      moveDrag(ev.clientX,ev.clientY);
+    }
+    function onUp(ev){
+      if(ev.pointerId!==e.pointerId) return;
+      endDrag();
+      document.removeEventListener('pointermove',onMove,{capture:true});
+      document.removeEventListener('pointerup',  onUp,  {capture:true});
+      document.removeEventListener('pointercancel',onUp,{capture:true});
+    }
+    document.addEventListener('pointermove',onMove,{capture:true,passive:false});
+    document.addEventListener('pointerup',  onUp,  {capture:true});
+    document.addEventListener('pointercancel',onUp,{capture:true});
+  }
+
+  generateAndLoad();
+  window.addEventListener('resize', ()=>renderGrid());
+})();
+</script>
 </body>
 </html>
